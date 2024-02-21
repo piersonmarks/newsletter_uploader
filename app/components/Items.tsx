@@ -1,8 +1,20 @@
 "use client";
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import supabase from "@/utils/supabase";
+import {
+  NextUIProvider,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
+  Button,
+  Link,
+  Checkbox,
+  CheckboxGroup,
+} from "@nextui-org/react";
 
 // Human readable date
 const getDate = (dateString) => {
@@ -19,7 +31,7 @@ const getDate = (dateString) => {
 const prices = ["FREE", "FREEMIUM", "PAID"];
 const frequencies = ["daily", "weekly", "monthly"];
 
-const Item = ({ item }) => {
+const Item = ({ item, setNewItem }) => {
   // Assuming this is inside your component
   const [description, setDescription] = useState(item.description);
   const [shortDescription, setShortDescription] = useState("");
@@ -28,6 +40,36 @@ const Item = ({ item }) => {
   const [categories, setCategories] = useState(item.categories);
   const [newCategory, setNewCategory] = useState("");
   const [url, setUrl] = useState(item.url);
+  const [similarNewslettersList, setSimilarNewslettersList] = useState([]);
+  const [selectedSimiliarNewsletterIds, setSelectedSimiliarNewsletterIds] =
+    useState([]);
+
+  // create item from the state
+  useEffect(() => {
+    const newItem = {
+      title: item.title,
+      description,
+      shortDescription,
+      pricing,
+      frequency,
+      categories,
+      url,
+      ogImage: item.ogImage,
+      slug: item.slug,
+    };
+    setNewItem(newItem);
+  }, [
+    description,
+    shortDescription,
+    pricing,
+    frequency,
+    categories,
+    url,
+    item.title,
+    item.ogImage,
+    item.slug,
+    setNewItem,
+  ]);
 
   const handleDelete = (categoryToDelete) => {
     setCategories(
@@ -35,14 +77,52 @@ const Item = ({ item }) => {
     );
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     setCategories([...categories, newCategory]);
     setNewCategory("");
   };
 
-  const handleNewCategoryChange = (event) => {
+  const handleNewCategoryChange = async (event) => {
     setNewCategory(event.target.value);
   };
+
+  useEffect(() => {
+    const fetchSimiliarNewsletters = async () => {
+      // make lowercase
+      const lowerCaseCategories = categories.map((category) =>
+        category.toLowerCase()
+      );
+
+      const { data, error } = await supabase
+        .from("Newsletters")
+        .select()
+        .contains("categories", lowerCaseCategories);
+
+      if (error) {
+        console.error("Error fetching similar newsletters", error);
+      }
+
+      // If there are similar newsletters, sort based on the number of categories that match
+      console.log("Similar newsletters fetched successfully", data);
+      if (data && data.length > 0) {
+        const similarNewsletters = data
+          .map((newsletter) => {
+            const matches = newsletter.categories.filter((category) =>
+              lowerCaseCategories.includes(category)
+            );
+            return { ...newsletter, matches };
+          })
+          .sort((a, b) => b.matches.length - a.matches.length);
+
+        setSimilarNewslettersList(similarNewsletters);
+      }
+    };
+
+    if (categories.length > 0) {
+      // Fetch the similar newsletters
+      fetchSimiliarNewsletters();
+    }
+  }, [categories]);
 
   useEffect(() => {
     setDescription(item.description);
@@ -72,6 +152,8 @@ const Item = ({ item }) => {
     setPricing(event.target.value);
   };
 
+  console.log("selectedSimiliarNewsletterIds", selectedSimiliarNewsletterIds);
+
   return (
     <div className="flex flex-col items-center justify-center ">
       <div className="max-w-4xl p-4 bg-gray-100 rounded-lg shadow px-8 py-4">
@@ -98,12 +180,13 @@ const Item = ({ item }) => {
           />
 
           <button
-            className="text-xs my-2 px-4 py-2 text-white bg-purple-500 rounded hover:bg-purple-600 min-w-32 font-semibold"
+            className="text-xs my-2 px-4 py-2 text-white bg-purple-500 rounded hover:bg-purple-600 min-w-32 font-semibold focus:outline-none focus:shadow-outline disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={onGenerateShortDescription}
+            disabled={true}
           >
-            Generate Short Description with AI
+            Generate Short Description with AI (Work In Progress)
           </button>
-          <p className="text-sm mt-4">AI Generated Short Description:</p>
+          <p className="text-sm mt-4">Short Description:</p>
           <textarea
             className="mt-2 w-full p-4 text-sm text-gray-700 border rounded-lg focus:ring-blue-500 focus:border-blue-500 block mt-1 shadow-sm bg-gray-50 hover:bg-white focus:outline-none"
             onChange={onShortDescriptionChange}
@@ -168,10 +251,51 @@ const Item = ({ item }) => {
             <button
               onClick={handleAdd}
               className="ml-2 min-w-32 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={categories.length >= 3}
+              disabled={categories.length >= 3 || newCategory === ""}
             >
               Add
             </button>
+          </div>
+          {/* Similar Newsletters (TODO: Replace with AI)*/}
+          <div className="mt-4">
+            <p className="text-sm font-semibold">
+              Similar Newsletters (Based on Categories):
+            </p>
+            <p className="text-xs">
+              You can select as many as you want. Only 5 max will be shown to
+              the user.
+            </p>
+            <div
+              className="mt-4 overflow-auto max-h-64 bg-white rounded-md p-4"
+              style={{ scrollbarWidth: "thin", scrollbarColor: "#888 #eee" }}
+            >
+              <ul>
+                {similarNewslettersList.length === 0 && (
+                  <p className="italic text-xs">
+                    No similar newsletters found.
+                  </p>
+                )}
+                <CheckboxGroup
+                  color="secondary"
+                  value={selectedSimiliarNewsletterIds}
+                  onValueChange={setSelectedSimiliarNewsletterIds}
+                >
+                  {similarNewslettersList.map((newsletter: any) => (
+                    <li key={newsletter.id} className="mb-4">
+                      <Checkbox value={newsletter.id}>
+                        <p className="text-md font-semibold mb-1 ">
+                          {newsletter.title}{" "}
+                          <span>({newsletter.categories.join(", ")})</span>
+                        </p>
+                        <p className="text-sm italic">
+                          {newsletter.description}
+                        </p>
+                      </Checkbox>
+                    </li>
+                  ))}
+                </CheckboxGroup>
+              </ul>
+            </div>
           </div>
           <div className="mt-8">
             <iframe
@@ -181,7 +305,7 @@ const Item = ({ item }) => {
             />
             <p className="italic">
               Subscription Website:{" "}
-              <Link href={url} className="hover:underline">
+              <Link href={url} isExternal className="hover:underline">
                 {url}
               </Link>
             </p>
@@ -210,8 +334,11 @@ const fetchData = async () => {
 };
 
 export const Items = () => {
+  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [data, setData] = useState<any[]>([]);
+  const [newItem, setNewItem] = useState<any>({});
 
   useEffect(() => {
     (async () => {
@@ -236,67 +363,140 @@ export const Items = () => {
   }
 
   const currentItem = data[currentIndex];
-  console.log("Current Item", currentItem);
+
+  const onApprove = async () => {
+    // Fetch the related newsletters from the DB based on the categories
+
+    onOpen();
+  };
 
   return (
-    <div>
-      <Item item={currentItem} />
-      <div className="w-full">
-        <div className="flex gap-4 mt-8 mx-auto text-center justify-center align-center">
-          <button
-            onClick={() =>
-              setCurrentIndex((prevIndex) =>
-                prevIndex > 0 ? prevIndex - 1 : data.length - 1
-              )
-            }
-            className="px-4 py-2 text-white bg-blue-300 rounded hover:bg-blue-400 min-w-32 font-semibold"
-          >
-            Back
-          </button>
-          <button
-            onClick={async () => {
-              try {
-                const { error } = await supabase
-                  .from("NewsletterSubmissions")
-                  .update({ rejected: true })
-                  .eq("id", currentItem.id);
-                if (error) {
-                  console.error("Error updating newsletter submission", error);
-                } else {
-                  console.log("Newsletter submission updated successfully");
-                  setData((prevData) =>
-                    prevData.filter((item) => item.id !== currentItem.id)
-                  );
+    <NextUIProvider>
+      <div>
+        <div>
+          <Item item={currentItem} setNewItem={setNewItem} />
+          <div className="w-full">
+            <div className="flex gap-4 mt-8 mx-auto text-center justify-center align-center">
+              <button
+                onClick={() =>
+                  setCurrentIndex((prevIndex) =>
+                    prevIndex > 0 ? prevIndex - 1 : data.length - 1
+                  )
                 }
-              } catch (error) {
-                console.error("Error updating newsletter submission", error);
-              }
-            }}
-            className="px-4 py-2 text-white bg-red-500 rounded hover:bg-red-600 min-w-32 font-semibold"
-          >
-            Reject
-          </button>
-          <button
-            onClick={() =>
-              setCurrentIndex((prevIndex) => (prevIndex + 1) % data.length)
-            }
-            className="px-4 py-2 text-white bg-green-500 rounded hover:bg-green-600 min-w-32 font-semibold"
-          >
-            Approve
-          </button>
-          <button
-            onClick={() =>
-              setCurrentIndex((prevIndex) => (prevIndex + 1) % data.length)
-            }
-            className="px-4 py-2 text-white bg-blue-300 rounded hover:bg-blue-400 min-w-32 font-semibold"
-          >
-            Skip
-          </button>
+                className="px-4 py-2 text-white bg-blue-300 rounded hover:bg-blue-400 min-w-32 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={data.length === 1}
+              >
+                Back
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const { error } = await supabase
+                      .from("NewsletterSubmissions")
+                      .update({ rejected: true })
+                      .eq("id", currentItem.id);
+                    if (error) {
+                      console.error(
+                        "Error updating newsletter submission",
+                        error
+                      );
+                    } else {
+                      console.log("Newsletter submission updated successfully");
+                      setData((prevData) =>
+                        prevData.filter((item) => item.id !== currentItem.id)
+                      );
+                    }
+                  } catch (error) {
+                    console.error(
+                      "Error updating newsletter submission",
+                      error
+                    );
+                  }
+                }}
+                className="px-4 py-2 text-white bg-red-500 rounded hover:bg-red-600 min-w-32 font-semibold"
+              >
+                Reject
+              </button>
+              <button
+                onClick={onApprove}
+                className="px-4 py-2 text-white bg-green-500 rounded hover:bg-green-600 min-w-32 font-semibold"
+              >
+                Approve
+              </button>
+              <button
+                onClick={() =>
+                  setCurrentIndex((prevIndex) => (prevIndex + 1) % data.length)
+                }
+                className="px-4 py-2 text-white bg-blue-300 rounded hover:bg-blue-400 min-w-32 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={data.length === 1}
+              >
+                Skip
+              </button>
+            </div>
+          </div>
+          <p className="text-sm mt-2 text-center">
+            Item: {currentIndex + 1} of {data.length}
+          </p>
+          <p className="text-sm mt-2 text-center opacity-70 italic">
+            If you accidentally reject a submission, go to Supabase and reset
+            the &quot;rejected&quot; column to false.
+          </p>
         </div>
+        <Modal isOpen={isOpen} onOpenChange={onOpenChange}>
+          <ModalContent>
+            {(onClose) => (
+              <>
+                <ModalHeader className="flex flex-col gap-1">
+                  Confirm Submission
+                </ModalHeader>
+                <ModalBody>
+                  {/* Put all the info from the new item here */}
+                  <Image
+                    src={newItem.ogImage}
+                    alt="OG Image"
+                    width={500}
+                    height={300}
+                  />
+                  <p className="text-sm font-semibold">
+                    Title: {newItem.title}
+                  </p>
+                  <p className="text-sm font-semibold">
+                    Description: {newItem.description}
+                  </p>
+                  <p className="text-sm font-semibold">
+                    Short Description: {newItem.shortDescription}
+                  </p>
+                  <p className="text-sm font-semibold">
+                    Pricing: {newItem.pricing}
+                  </p>
+                  <p className="text-sm font-semibold">
+                    Frequency: {newItem.frequency}
+                  </p>
+                  <p className="text-sm font-semibold">
+                    Categories: {newItem.categories.join(", ")}
+                  </p>
+                  <p className="text-sm font-semibold">
+                    Subscribe Link:{" "}
+                    <Link isExternal href={newItem.url}>
+                      {newItem.url}
+                    </Link>
+                  </p>
+
+                  <p className="text-sm font-semibold">Slug: /{newItem.slug}</p>
+                </ModalBody>
+                <ModalFooter>
+                  <Button color="danger" variant="light" onPress={onClose}>
+                    Close
+                  </Button>
+                  <Button color="primary" onPress={onClose}>
+                    Action
+                  </Button>
+                </ModalFooter>
+              </>
+            )}
+          </ModalContent>
+        </Modal>
       </div>
-      <p className="text-sm mt-2 text-center">
-        Item: {currentIndex + 1} of {data.length}
-      </p>
-    </div>
+    </NextUIProvider>
   );
 };
