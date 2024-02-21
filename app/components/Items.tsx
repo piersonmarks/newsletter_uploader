@@ -95,24 +95,30 @@ const Item = ({ item, setNewItem }) => {
 
   useEffect(() => {
     const fetchSimiliarNewsletters = async () => {
+      console.log("Fetching similar newsletters");
       // make lowercase
       const lowerCaseCategories = categories.map((category) =>
         category.toLowerCase()
       );
 
-      const { data, error } = await supabase
-        .from("Newsletters")
-        .select()
-        .contains("categories", lowerCaseCategories);
+      const { data, error } = await supabase.from("Newsletters").select();
 
-      if (error) {
+      if (error || !data) {
         console.error("Error fetching similar newsletters", error);
+        return;
       }
 
+      const filteredData = data.filter((newsletter) =>
+        newsletter.categories.some((category) =>
+          lowerCaseCategories.includes(category)
+        )
+      );
+
       // If there are similar newsletters, sort based on the number of categories that match
-      console.log("Similar newsletters fetched successfully", data);
-      if (data && data.length > 0) {
-        const similarNewsletters = data
+      console.log("Similar newsletters fetched successfully", filteredData);
+      let similarNewsletters = [];
+      if (filteredData && filteredData.length > 0) {
+        similarNewsletters = filteredData
           .map((newsletter) => {
             const matches = newsletter.categories.filter((category) =>
               lowerCaseCategories.includes(category)
@@ -120,15 +126,12 @@ const Item = ({ item, setNewItem }) => {
             return { ...newsletter, matches };
           })
           .sort((a, b) => b.matches.length - a.matches.length);
-
-        setSimilarNewslettersList(similarNewsletters);
       }
+      setSimilarNewslettersList(similarNewsletters);
     };
 
-    if (categories.length > 0) {
-      // Fetch the similar newsletters
-      fetchSimiliarNewsletters();
-    }
+    // Fetch the similar newsletters
+    fetchSimiliarNewsletters();
   }, [categories]);
 
   useEffect(() => {
@@ -158,8 +161,6 @@ const Item = ({ item, setNewItem }) => {
   const handlePricingChange = (event) => {
     setPricing(event.target.value);
   };
-
-  console.log("selectedSimiliarNewsletterIds", selectedSimiliarNewsletterIds);
 
   return (
     <div className="flex flex-col items-center justify-center ">
@@ -305,11 +306,11 @@ const Item = ({ item, setNewItem }) => {
             </div>
           </div>
           <div className="mt-8">
-            <iframe
+            {/* <iframe
               src={url}
               className="w-full h-96 mt-4"
               title="Newsletter Submission"
-            />
+            /> */}
             <p className="italic">
               Subscription Website:{" "}
               <Link href={url} isExternal className="hover:underline">
@@ -373,8 +374,76 @@ export const Items = () => {
 
   const onApprove = async () => {
     // Fetch the related newsletters from the DB based on the categories
-
     onOpen();
+  };
+
+  // Upload the new item to the Newsletters table
+  const onSubmit = async (onClose: any) => {
+    try {
+      // convert the similiar newsletters to an array of ids
+      const relatedNewsletterIds = newItem.similarNewslettersList.map(
+        (newsletter) => newsletter.id
+      );
+
+      // Convert the description to an array split by new lines
+      const description = newItem.description.split("\n");
+
+      const itemToUpload = {
+        title: newItem.title,
+        description: description,
+        shortDescription: newItem.shortDescription,
+        price: newItem.pricing,
+        frequency: newItem.frequency,
+        categories: newItem.categories,
+        url: newItem.url,
+        ogImage: newItem.ogImage,
+        slug: newItem.slug,
+        relatedNewsletterIds: relatedNewsletterIds,
+      };
+
+      console.log("Uploading newsletter", itemToUpload);
+
+      const { data, error } = await supabase
+        .from("Newsletters")
+        .insert([itemToUpload]);
+      if (error) {
+        console.error("Error uploading newsletter", error);
+        throw new Error("Error uploading newsletter");
+      }
+
+      // Update the related newsletters in the NewsletterSubmissions table, adding this newsletter id to their relatedNewsletterIds array
+      if (relatedNewsletterIds.length > 0) {
+        const { error: relatedError } = await supabase
+          .from("NewsletterSubmissions")
+          .update({ relatedNewsletterIds })
+          .in("id", relatedNewsletterIds);
+        if (relatedError) {
+          console.error("Error updating related newsletters", relatedError);
+          throw new Error("Error updating related newsletters");
+        }
+      }
+
+      // Set the current item to uploaded in the NewsletterSubmissions table
+      const { error: submissionError } = await supabase
+        .from("NewsletterSubmissions")
+        .update({ uploaded: true })
+        .eq("id", currentItem.id);
+
+      if (submissionError) {
+        throw new Error("Error updating newsletter submission");
+      }
+
+      // Refresh Data
+      const submissionData = await fetchData();
+      if (submissionData) {
+        setData(submissionData);
+      }
+
+      // Close the modal
+      onClose();
+    } catch (error) {
+      console.error("Error uploading newsletter", error);
+    }
   };
 
   return (
@@ -516,8 +585,8 @@ export const Items = () => {
                   <Button color="danger" variant="light" onPress={onClose}>
                     Close
                   </Button>
-                  <Button color="primary" onPress={onClose}>
-                    Action
+                  <Button color="primary" onPress={() => onSubmit(onClose)}>
+                    Confirm Submission
                   </Button>
                 </ModalFooter>
               </>
