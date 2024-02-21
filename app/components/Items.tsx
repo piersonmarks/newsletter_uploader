@@ -306,11 +306,11 @@ const Item = ({ item, setNewItem }) => {
             </div>
           </div>
           <div className="mt-8">
-            {/* <iframe
+            <iframe
               src={url}
               className="w-full h-96 mt-4"
               title="Newsletter Submission"
-            /> */}
+            />
             <p className="italic">
               Subscription Website:{" "}
               <Link href={url} isExternal className="hover:underline">
@@ -409,8 +409,11 @@ export const Items = () => {
 
       const { data, error } = await supabase
         .from("Newsletters")
-        .insert([itemToUpload]);
-      if (error || !data) {
+        .insert([itemToUpload])
+        .select();
+
+      console.log("Data", data);
+      if (error) {
         console.error("Error uploading newsletter", error);
         throw new Error("Error uploading newsletter");
       }
@@ -436,6 +439,11 @@ export const Items = () => {
             ...(newsletterData.relatedNewsletterIds || []),
             newNewsletterId,
           ];
+
+          console.log(
+            "Updating related newsletters",
+            updatedRelatedNewsletterIds
+          );
 
           // Update the newsletter with the new array
           const { error: updateError } = await supabase
