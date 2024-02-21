@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import supabase from "@/utils/supabase";
 
 // Human readable date
 const getDate = (dateString) => {
@@ -16,14 +17,17 @@ const getDate = (dateString) => {
 };
 
 const prices = ["FREE", "FREEMIUM", "PAID"];
+const frequencies = ["daily", "weekly", "monthly"];
 
-const Item = ({ item, newCurrentItem, setNewCurrentItem }) => {
+const Item = ({ item }) => {
   // Assuming this is inside your component
   const [description, setDescription] = useState(item.description);
   const [shortDescription, setShortDescription] = useState("");
   const [pricing, setPricing] = useState(item.pricing);
+  const [frequency, setFrequency] = useState(item.frequency);
   const [categories, setCategories] = useState(item.categories);
   const [newCategory, setNewCategory] = useState("");
+  const [url, setUrl] = useState(item.url);
 
   const handleDelete = (categoryToDelete) => {
     setCategories(
@@ -44,7 +48,9 @@ const Item = ({ item, newCurrentItem, setNewCurrentItem }) => {
     setDescription(item.description);
     setShortDescription("");
     setPricing(item.pricing);
+    setFrequency(item.frequency);
     setCategories(item.categories);
+    setUrl(item.url);
   }, [item]);
 
   const handleDescriptionChange = (event) => {
@@ -81,6 +87,9 @@ const Item = ({ item, newCurrentItem, setNewCurrentItem }) => {
           <p className="text-xs mt-1 italic">
             Submitted at: {getDate(item.created_at)}
           </p>
+          <p className="text-xs mt-1 italic">
+            {item.firstName} {item.lastName} ({item.email})
+          </p>
           <p className="text-sm mt-4">Description: </p>
           <textarea
             value={description}
@@ -102,7 +111,8 @@ const Item = ({ item, newCurrentItem, setNewCurrentItem }) => {
           />
 
           {/* Display other details */}
-          <div className="mt-4">
+          <div className="mt-4 mb-8">
+            <p className="text-sm">Price:</p>
             <select
               className="py-1 text-sm font-semibold text-blue-800 bg-blue-200 rounded-md"
               value={pricing}
@@ -115,7 +125,24 @@ const Item = ({ item, newCurrentItem, setNewCurrentItem }) => {
               ))}
             </select>
           </div>
-          <div className="flex flex-wrap gap-2 mt-4">
+
+          <div className="mt-4 mb-8">
+            <p className="text-sm">Frequency:</p>
+            <select
+              className="py-1 text-sm font-semibold text-purple-800 bg-purple-200 rounded-md"
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value)}
+            >
+              {frequencies.map((freq) => (
+                <option key={freq} value={freq}>
+                  {freq.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <p className="text-sm mt-4">Categories (Max 3):</p>
+          <div className="flex flex-wrap gap-2 mt-1">
             {categories.map((category) => (
               <div key={category} className="flex items-center gap-2">
                 <button
@@ -123,7 +150,7 @@ const Item = ({ item, newCurrentItem, setNewCurrentItem }) => {
                   className="px-3 py-1 text-sm text-gray-800 bg-gray-200 rounded-full"
                 >
                   {category}{" "}
-                  <span className="text-sm font-medium ml-2 inline-flex items-center justify-center border border-transparent rounded-full bg-gray-500 text-white h-4 w-4">
+                  <span className="text-xs font-medium ml-2 inline-flex items-center justify-center border border-transparent rounded-full bg-gray-500 text-white h-4 w-4">
                     x
                   </span>
                 </button>
@@ -146,28 +173,16 @@ const Item = ({ item, newCurrentItem, setNewCurrentItem }) => {
               Add
             </button>
           </div>
-
-          {/* Categories */}
-          {/* <div className="flex flex-wrap gap-2 mt-4">
-            {item.categories.map((category) => (
-              <span
-                key={category}
-                className="px-3 py-1 text-sm text-gray-800 bg-gray-200 rounded-full"
-              >
-                {category}
-              </span>
-            ))}
-          </div> */}
-          <div>
+          <div className="mt-8">
             <iframe
-              src={item.url}
+              src={url}
               className="w-full h-96 mt-4"
               title="Newsletter Submission"
-            ></iframe>
+            />
             <p className="italic">
               Subscription Website:{" "}
-              <Link href={item.url} className="hover:underline">
-                {item.url}
+              <Link href={url} className="hover:underline">
+                {url}
               </Link>
             </p>
           </div>
@@ -177,20 +192,55 @@ const Item = ({ item, newCurrentItem, setNewCurrentItem }) => {
   );
 };
 
-export const Items = ({ data }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const currentItem = data[currentIndex];
-  const [newCurrentItem, setNewCurrentItem] = useState();
+// On Reject: Set the item in the DB to rejected
+// On Approve: Pop up a confirmation modal, fetch the related newsletters from the DB, then upload
 
-  const approveItem = async (id) => {};
+const fetchData = async () => {
+  const { data, error } = await supabase
+    .from("NewsletterSubmissions")
+    .select("*")
+    .eq("rejected", false)
+    .eq("uploaded", false);
+  if (error) {
+    console.error("Error fetching newsletter submissions", error);
+  } else {
+    console.log("Newsletter submissions fetched successfully");
+    return data;
+  }
+};
+
+export const Items = () => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [data, setData] = useState<any[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const data = await fetchData();
+      if (data) {
+        setData(data);
+      }
+    })();
+  }, []);
+
+  if (data.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center">
+        <h2 className="text-2xl font-semibold text-center">
+          No newsletter submissions to review
+        </h2>
+        <p className="mt-2 text-center">
+          There are no newsletter submissions to review at the moment.
+        </p>
+      </div>
+    );
+  }
+
+  const currentItem = data[currentIndex];
+  console.log("Current Item", currentItem);
 
   return (
     <div>
-      <Item
-        item={currentItem}
-        newCurrentItem={newCurrentItem}
-        setNewCurrentItem={setNewCurrentItem}
-      />
+      <Item item={currentItem} />
       <div className="w-full">
         <div className="flex gap-4 mt-8 mx-auto text-center justify-center align-center">
           <button
@@ -199,20 +249,54 @@ export const Items = ({ data }) => {
                 prevIndex > 0 ? prevIndex - 1 : data.length - 1
               )
             }
-            className="px-4 py-2 text-white bg-blue-500 rounded hover:bg-blue-600 min-w-32 font-semibold"
+            className="px-4 py-2 text-white bg-blue-300 rounded hover:bg-blue-400 min-w-32 font-semibold"
           >
-            Previous
+            Back
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                const { error } = await supabase
+                  .from("NewsletterSubmissions")
+                  .update({ rejected: true })
+                  .eq("id", currentItem.id);
+                if (error) {
+                  console.error("Error updating newsletter submission", error);
+                } else {
+                  console.log("Newsletter submission updated successfully");
+                  setData((prevData) =>
+                    prevData.filter((item) => item.id !== currentItem.id)
+                  );
+                }
+              } catch (error) {
+                console.error("Error updating newsletter submission", error);
+              }
+            }}
+            className="px-4 py-2 text-white bg-red-500 rounded hover:bg-red-600 min-w-32 font-semibold"
+          >
+            Reject
           </button>
           <button
             onClick={() =>
               setCurrentIndex((prevIndex) => (prevIndex + 1) % data.length)
             }
-            className="px-4 py-2 text-white bg-blue-500 rounded hover:bg-blue-600 min-w-32 font-semibold"
+            className="px-4 py-2 text-white bg-green-500 rounded hover:bg-green-600 min-w-32 font-semibold"
           >
-            Next
+            Approve
+          </button>
+          <button
+            onClick={() =>
+              setCurrentIndex((prevIndex) => (prevIndex + 1) % data.length)
+            }
+            className="px-4 py-2 text-white bg-blue-300 rounded hover:bg-blue-400 min-w-32 font-semibold"
+          >
+            Skip
           </button>
         </div>
       </div>
+      <p className="text-sm mt-2 text-center">
+        Item: {currentIndex + 1} of {data.length}
+      </p>
     </div>
   );
 };
