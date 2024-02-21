@@ -46,6 +46,10 @@ const Item = ({ item, setNewItem }) => {
 
   // create item from the state
   useEffect(() => {
+    const selectedSimiliarNewsletters = similarNewslettersList.filter(
+      (newsletter) => selectedSimiliarNewsletterIds.includes(newsletter.id)
+    );
+
     const newItem = {
       title: item.title,
       description,
@@ -56,6 +60,7 @@ const Item = ({ item, setNewItem }) => {
       url,
       ogImage: item.ogImage,
       slug: item.slug,
+      similarNewslettersList: selectedSimiliarNewsletters,
     };
     setNewItem(newItem);
   }, [
@@ -69,6 +74,8 @@ const Item = ({ item, setNewItem }) => {
     item.ogImage,
     item.slug,
     setNewItem,
+    similarNewslettersList,
+    selectedSimiliarNewsletterIds,
   ]);
 
   const handleDelete = (categoryToDelete) => {
@@ -446,7 +453,7 @@ export const Items = () => {
           <ModalContent>
             {(onClose) => (
               <>
-                <ModalHeader className="flex flex-col gap-1">
+                <ModalHeader className="flex flex-col ">
                   Confirm Submission
                 </ModalHeader>
                 <ModalBody>
@@ -457,32 +464,53 @@ export const Items = () => {
                     width={500}
                     height={300}
                   />
-                  <p className="text-sm font-semibold">
-                    Title: {newItem.title}
+                  <p className="text-sm ">
+                    <span className="font-semibold">Title:</span>{" "}
+                    {newItem.title}
                   </p>
-                  <p className="text-sm font-semibold">
-                    Description: {newItem.description}
+                  <p className="text-sm font-semibold"> Description:</p>
+                  <p className="text-sm">{newItem.Description}</p>
+                  <p className="text-sm font-semibold">Short Description:</p>
+                  <p className="text-sm">{newItem.shortDescription}</p>
+
+                  <p className="text-sm mt-2">Pricing: {newItem.pricing}</p>
+                  <p className="text-sm">Frequency: {newItem.frequency}</p>
+                  <p className="text-sm">
+                    Categories:{" "}
+                    {newItem.categories.length > 0 ? (
+                      newItem.categories.join(", ")
+                    ) : (
+                      <span className="text-red-500">No categories</span>
+                    )}
                   </p>
-                  <p className="text-sm font-semibold">
-                    Short Description: {newItem.shortDescription}
-                  </p>
-                  <p className="text-sm font-semibold">
-                    Pricing: {newItem.pricing}
-                  </p>
-                  <p className="text-sm font-semibold">
-                    Frequency: {newItem.frequency}
-                  </p>
-                  <p className="text-sm font-semibold">
-                    Categories: {newItem.categories.join(", ")}
-                  </p>
-                  <p className="text-sm font-semibold">
+                  <p className="text-sm">
                     Subscribe Link:{" "}
-                    <Link isExternal href={newItem.url}>
+                    <Link isExternal href={newItem.url} className="text-sm">
                       {newItem.url}
                     </Link>
                   </p>
-
-                  <p className="text-sm font-semibold">Slug: /{newItem.slug}</p>
+                  <p className="text-sm">Slug: /{newItem.slug}</p>
+                  {/* Similiar Newsletters */}
+                  <p className="text-sm mt-4">Similar Newsletters:</p>
+                  {newItem.similarNewslettersList.length === 0 && (
+                    <p className="italic text-xs text-warning-400">
+                      No similar newsletters.
+                    </p>
+                  )}
+                  <ul>
+                    {newItem.similarNewslettersList &&
+                      newItem.similarNewslettersList.map((newsletter) => (
+                        <li key={newsletter.id}>
+                          <p className="text-md font-semibold mb-1 ">
+                            {newsletter.title}{" "}
+                            <span>({newsletter.categories.join(", ")})</span>
+                          </p>
+                          <p className="text-sm italic">
+                            {newsletter.shortDescription}
+                          </p>
+                        </li>
+                      ))}
+                  </ul>
                 </ModalBody>
                 <ModalFooter>
                   <Button color="danger" variant="light" onPress={onClose}>
