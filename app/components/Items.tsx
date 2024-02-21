@@ -388,13 +388,17 @@ export const Items = () => {
       // Convert the description to an array split by new lines
       const description = newItem.description.split("\n");
 
+      const categories = newItem.categories.map((category) =>
+        category.toLowerCase()
+      );
+
       const itemToUpload = {
         title: newItem.title,
         description: description,
         shortDescription: newItem.shortDescription,
         price: newItem.pricing,
         frequency: newItem.frequency,
-        categories: newItem.categories,
+        categories: categories,
         url: newItem.url,
         ogImage: newItem.ogImage,
         slug: newItem.slug,
@@ -406,20 +410,43 @@ export const Items = () => {
       const { data, error } = await supabase
         .from("Newsletters")
         .insert([itemToUpload]);
-      if (error) {
+      if (error || !data) {
         console.error("Error uploading newsletter", error);
         throw new Error("Error uploading newsletter");
       }
 
+      const newNewsletterId = data[0].id;
+
       // Update the related newsletters in the NewsletterSubmissions table, adding this newsletter id to their relatedNewsletterIds array
       if (relatedNewsletterIds.length > 0) {
-        const { error: relatedError } = await supabase
-          .from("NewsletterSubmissions")
-          .update({ relatedNewsletterIds })
-          .in("id", relatedNewsletterIds);
-        if (relatedError) {
-          console.error("Error updating related newsletters", relatedError);
-          throw new Error("Error updating related newsletters");
+        // For each related newsletter id, update it in the Newsletters table
+        for (const id of relatedNewsletterIds) {
+          // Retrieve the current relatedNewsletterIds for the newsletter
+          let { data: newsletterData, error: fetchError } = await supabase
+            .from("Newsletters")
+            .select("relatedNewsletterIds")
+            .eq("id", id)
+            .single();
+          if (fetchError || !newsletterData) {
+            console.error("Error fetching newsletter data", fetchError);
+            throw new Error("Error fetching newsletter data");
+          }
+
+          const updatedRelatedNewsletterIds = [
+            ...(newsletterData.relatedNewsletterIds || []),
+            newNewsletterId,
+          ];
+
+          // Update the newsletter with the new array
+          const { error: updateError } = await supabase
+            .from("Newsletters")
+            .update({ relatedNewsletterIds: updatedRelatedNewsletterIds })
+            .eq("id", id);
+
+          if (updateError) {
+            console.error("Error updating related newsletters", updateError);
+            throw new Error("Error updating related newsletters");
+          }
         }
       }
 
@@ -538,7 +565,7 @@ export const Items = () => {
                     {newItem.title}
                   </p>
                   <p className="text-sm font-semibold"> Description:</p>
-                  <p className="text-sm">{newItem.Description}</p>
+                  <p className="text-sm">{newItem.description}</p>
                   <p className="text-sm font-semibold">Short Description:</p>
                   <p className="text-sm">{newItem.shortDescription}</p>
 
